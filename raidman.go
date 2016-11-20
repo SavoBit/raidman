@@ -8,13 +8,16 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"reflect"
 	"sync"
 	"time"
 
-	"github.com/mistsys/raidman/proto"
+	"golang.org/x/net/proxy"
+
 	pb "github.com/golang/protobuf/proto"
+	"github.com/mistsys/raidman/proto"
 )
 
 type network interface {
@@ -46,31 +49,102 @@ type Event struct {
 	Attributes  map[string]string
 }
 
-// Dial establishes a connection to a Riemann server at addr, on the network
-// netwrk, with a timeout of timeout
-//
-// Known networks are "tcp", "tcp4", "tcp6", "udp", "udp4", and "udp6".
-func DialWithTimeout(netwrk, addr string, timeout time.Duration) (c *Client, err error) {
-	c = new(Client)
+// A Dialer is a means to establish a connection.
+type Dialer interface {
+	// Dial connects to the given address via the proxy.
+	Dial(network, addr string) (c net.Conn, err error)
+}
 
+// ClientBuilder uses the builder pattern to create Clients with different options
+type CnxnBuilder interface {
+	SetDialer(dialer Dialer) *CnxnBuilder
+	WithEnvironmentProxy(use bool) *CnxnBuilder
+	WithNetwork(network string) *CnxnBuilder
+	WithTimeout(duration time.Duration) *CnxnBuilder
+	Build() (*Client, error)
+}
+
+// the
+type ClientBuilder struct {
+	dialer      proxy.Dialer
+	useEnvProxy bool
+	network     string
+	address     string
+	timeout     time.Duration
+}
+
+func NewClientBuilder() *ClientBuilder {
+	return &ClientBuilder{
+		dialer:      proxy.Direct,
+		useEnvProxy: true,
+		network:     "tcp",
+		address:     "localhost:5555",
+		timeout:     1 * time.Second}
+}
+
+func (builder *ClientBuilder) WithDialer(dialer Dialer) *ClientBuilder {
+	builder.dialer = dialer
+	return builder
+}
+
+func (builder *ClientBuilder) WithNetwork(network string) *ClientBuilder {
+	builder.network = network
+	return builder
+}
+
+func (builder *ClientBuilder) WithAddress(addr string) *ClientBuilder {
+	builder.address = addr
+	return builder
+}
+
+func (builder *ClientBuilder) WithTimeout(duration time.Duration) *ClientBuilder {
+	builder.timeout = duration
+	return builder
+}
+
+func (builder *ClientBuilder) Build() (c *Client, err error) {
+	if builder.useEnvProxy && builder.dialer == proxy.Direct {
+		proxyServer, isSet := os.LookupEnv("HTTP_PROXY")
+		if isSet {
+			proxyUrl, err := url.Parse(proxyServer)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Invalid proxy url %q\n", proxyUrl)
+			}
+			builder.dialer, err = proxy.FromURL(proxyUrl, proxy.Direct)
+		}
+	}
+	c = new(Client)
 	var cnet network
-	switch netwrk {
+	switch builder.network {
 	case "tcp", "tcp4", "tcp6":
 		cnet = new(tcp)
 	case "udp", "udp4", "udp6":
 		cnet = new(udp)
 	default:
-		return nil, fmt.Errorf("dial %q: unsupported network %q", netwrk, netwrk)
+		return nil, fmt.Errorf("dial %q: unsupported network %q", builder.network, builder.network)
 	}
 
 	c.net = cnet
-	c.timeout = timeout
-	c.connection, err = net.Dial(netwrk, addr)
+	c.timeout = builder.timeout
+	c.connection, err = builder.dialer.Dial(builder.network, builder.address)
 	if err != nil {
 		return nil, err
 	}
-
 	return c, nil
+}
+
+// Dial establishes a connection to a Riemann server at addr, on the network
+// netwrk, with a timeout of timeout
+//
+// Known networks are "tcp", "tcp4", "tcp6", "udp", "udp4", and "udp6".
+func DialWithTimeout(netwrk, addr string, timeout time.Duration) (c *Client, err error) {
+	var builder = &ClientBuilder{
+		dialer:      proxy.Direct,
+		useEnvProxy: true,
+		network:     netwrk,
+		address:     addr,
+		timeout:     timeout}
+	return builder.Build()
 }
 
 // Dial establishes a connection to a Riemann server at addr, on the network

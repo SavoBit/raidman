@@ -57,7 +57,7 @@ type Dialer interface {
 
 // ClientBuilder uses the builder pattern to create Clients with different options
 type CnxnBuilder interface {
-	SetDialer(dialer Dialer) *CnxnBuilder
+	WithDialer(dialer Dialer) *CnxnBuilder
 	WithEnvironmentProxy(use bool) *CnxnBuilder
 	WithNetwork(network string) *CnxnBuilder
 	WithTimeout(duration time.Duration) *CnxnBuilder

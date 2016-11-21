@@ -76,7 +76,7 @@ type ClientBuilder struct {
 func NewClientBuilder() *ClientBuilder {
 	return &ClientBuilder{
 		dialer:      proxy.Direct,
-		useEnvProxy: true,
+		useEnvProxy: false,
 		network:     "tcp",
 		address:     "localhost:5555",
 		timeout:     1 * time.Second}
@@ -94,6 +94,11 @@ func (builder *ClientBuilder) WithNetwork(network string) *ClientBuilder {
 
 func (builder *ClientBuilder) WithAddress(addr string) *ClientBuilder {
 	builder.address = addr
+	return builder
+}
+
+func (builder *ClientBuilder) WithEnvironmentProxy() *ClientBuilder {
+	builder.useEnvProxy = true
 	return builder
 }
 

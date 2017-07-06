@@ -49,6 +49,19 @@ type Event struct {
 	Attributes  map[string]string
 }
 
+// this is generally for tests
+func (e *Event) Equals(e1 *Event) (bool, err) {
+	pbEvent, err := eventToPbEvent(e)
+	if err != nil {
+		return false, err
+	}
+	pbEvent1, _ := eventToPbEvent(e1)
+	if err != nil {
+		return false, err
+	}
+	return reflect.DeepEqual(pbEvent, pbEvent1)
+}
+
 // A Dialer is a means to establish a connection.
 type Dialer interface {
 	// Dial connects to the given address via the proxy.

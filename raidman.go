@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -50,16 +51,17 @@ type Event struct {
 }
 
 // this is generally for tests
-func (e *Event) Equals(e1 *Event) (bool, err) {
+func (e *Event) Equals(e1 *Event) (bool, error) {
 	pbEvent, err := eventToPbEvent(e)
 	if err != nil {
 		return false, err
 	}
-	pbEvent1, _ := eventToPbEvent(e1)
+	pbEvent1, err := eventToPbEvent(e1)
 	if err != nil {
+		log.Println("Failed to convert event to protobuf: %s", err)
 		return false, err
 	}
-	return reflect.DeepEqual(pbEvent, pbEvent1)
+	return reflect.DeepEqual(pbEvent, pbEvent1), nil
 }
 
 // A Dialer is a means to establish a connection.
